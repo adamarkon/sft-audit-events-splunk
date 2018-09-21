@@ -52,7 +52,7 @@
       return;
     }
 
-    Logger.debug(INPUT_NAME, "Token is expired. Refreshing.");
+    Logger.info(INPUT_NAME, "Token is expired. Refreshing.");
 
     request({
       uri: this.getRequestUri('/service_token'),
@@ -103,7 +103,7 @@
         }
 
         request({
-          uri: self.getRequestUri('/audits'),
+          uri: self.getRequestUri('/auditsV2'),
           qs: qs,
           method: 'GET',
           json: true,
@@ -112,11 +112,11 @@
           }
         }, function(err, msg, body) {
           if (err) {
-            Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err.msg);
+            Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
             callback(err);
             return;
           }
-          callback(null, body.list);
+          callback(null, body);
         });
       }]
     }, function(err, results) {
@@ -150,33 +150,30 @@
   };
 
   /**
-   * A helper function that returns a parsed actor string.
-   */
-  ScaleftInput.prototype.formatActor = function(actorString) {
-    var self = this,
-        actorSplit = actorString.split(' ');
-
-    return actorSplit.reduce(function(result, a) {
-      var actorParts = a.split('=');
-
-      result[self.getActorType(actorParts[0])] = actorParts[1];
-      return result;
-    }, {});
-  };
-
-  /**
    * A helper function that formats events.
    */
-  ScaleftInput.prototype.formatEvent = function(ev) {
-    var self = this,
-        ret = {
+  ScaleftInput.prototype.formatEvent = function(ev, relatedObjects) {
+    var ret = {
           id: ev.id,
           timestamp: ev.timestamp
-        };
+        }
+        rObjs = {};
 
     Object.keys(ev.details).forEach(function(detail) {
-      ret[detail] = detail === 'actor' ? self.formatActor(ev.details[detail]) : ev.details[detail];
+      if (relatedObjects.hasOwnProperty(ev.details[detail])) {
+        var rObj = relatedObjects[ev.details[detail]],
+            objList = rObjs[rObj.type] || [];
+        objList.push(rObj.object);
+        rObjs[rObj.type] = objList;
+      } else if (ev.details[detail] !== '') {
+        ret[detail] = ev.details[detail];
+      }
     });
+
+
+    if (Object.keys(rObjs).length !== 0) {
+      ret['related_objects'] = rObjs;
+    }
 
     return ret;
   };
@@ -196,6 +193,7 @@
    * Saves the provided timestamp to the checkpoint file.
    */
   ScaleftInput.prototype.saveCheckpoint = function(timestamp) {
+    Logger.info(INPUT_NAME, "saving check point")
     fs.writeFileSync(this.getCheckpointPath(), timestamp.toString());
   };
 
@@ -206,17 +204,13 @@
   ScaleftInput.prototype.loadCheckpoint = function() {
     var ts = null;
     try {
-      ts = new Date(fs.readFileSync(this.getCheckpointPath()));
+      var ts = new Date(fs.readFileSync(this.getCheckpointPath()));
     } catch (e) {
       return false
     }
 
     if (isNaN(ts.getTime())) {
-      var parsed = parseInt(fs.readFileSync(this.getCheckpointPath()), 10);
-      if (isNaN(parsed)) {
-        return false
-      }
-      ts = new Date(parsed);
+      return false
     }
 
     return ts;
@@ -341,7 +335,7 @@
     var checkpoint = sftInput.loadCheckpoint();
 
     if (checkpoint) {
-      Logger.debug(INPUT_NAME, "Loaded checkpoint data: " + checkpoint);
+      Logger.info(INPUT_NAME, "Loaded checkpoint data: " + checkpoint);
       sftInput.lastIndexTime = checkpoint;
     }
 
@@ -352,7 +346,8 @@
         getEvents: sftInput.getEvents.bind(sftInput),
 
         emitToSplunk: ['getEvents', function (results, callback) {
-          var evts = results.getEvents,
+          var evts = results.getEvents.list,
+              relatedObjects = results.getEvents.related_objects,
               indexTime = null;
 
           if (!evts) {
@@ -367,13 +362,13 @@
               indexTime = evDate;
             }
 
-            if (evDate.getTime() <= sftInput.lastIndexTime.getTime()) {
+            if (evDate <= sftInput.lastIndexTime) {
               return;
             }
 
             var newEv = new Event({
               stanza: name,
-              data: sftInput.formatEvent(ev)
+              data: sftInput.formatEvent(ev, relatedObjects)
             });
 
             try {
@@ -384,7 +379,7 @@
           });
 
           sftInput.lastIndexTime = indexTime;
-          sftInput.saveCheckpoint(sftInput.lastIndexTime.getTime());
+          sftInput.saveCheckpoint(sftInput.lastIndexTime);
           callback();
         }]
       }, function (err) {
