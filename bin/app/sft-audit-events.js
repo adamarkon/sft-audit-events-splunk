@@ -7,6 +7,7 @@
 
   var request = require('request');
   var async = require('async');
+  var parseLinks = require('parse-link-header');
 
   var splunkjs = require("splunk-sdk");
   var ModularInputs = splunkjs.ModularInputs;
@@ -32,7 +33,8 @@
     this.clientKey = clientKey;
     this.clientSecret = clientSecret;
     this.checkPointDir = checkpointDir;
-    this.lastIndexTime = 0;
+    this.lastIndexOffset = "";
+    this.api_version = 2;
 
     if (instanceAddress.lastIndexOf('/') === instanceAddress.length - 1) {
       this.instanceAddr = instanceAddress.slice(0, -1);
@@ -52,7 +54,7 @@
       return;
     }
 
-    Logger.info(INPUT_NAME, "Token is expired. Refreshing.");
+    Logger.debug(INPUT_NAME, "Token is expired. Refreshing.");
 
     request({
       uri: this.getRequestUri('/service_token'),
@@ -94,59 +96,90 @@
     async.auto({
       refreshToken: this.refreshToken.bind(this),
       getEvents: ['refreshToken', function(results, callback) {
-        var qs = {
-          descending: '1'
-        };
+        var qs = {},
+            initialRequest = true,
+            gettingLatest = false;
 
-        if (self.lastIndexTime) {
-          qs.after_time = self.lastIndexTime
+        Logger.debug(INPUT_NAME, "Last offset: '" + self.lastIndexOffset + "'");
+
+        if (self.lastIndexOffset !== "") {
+          qs.offset = self.lastIndexOffset;
+        } else {
+          qs.count = 1;
+          qs.descending = true;
+          gettingLatest = true;
         }
 
-        request({
-          uri: self.getRequestUri('/auditsV2'),
-          qs: qs,
-          method: 'GET',
-          json: true,
-          auth: {
-            bearer: self.token
+        var uri = self.getRequestUri('/auditsV2');
+        var urls = [uri];
+        var audits = {
+          list: [],
+          relatedObjects: {}
+        };
+
+
+        async.until(function done() {
+          return urls.length === 0;
+        }, function(callback) {
+          var current = urls.shift();
+
+          Logger.debug(INPUT_NAME, "Grabbing audits page with: " + current);
+
+          var urlOpts = {
+            uri: current,
+            method: 'GET',
+            json: true,
+            auth: {
+              bearer: self.token
+            }
+          };
+
+          if (initialRequest) {
+            urlOpts.qs = qs;
+            initialRequest = false;
           }
-        }, function(err, msg, body) {
+
+          request(urlOpts, function (err, msg, body) {
+            if (err) {
+              Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
+              callback(err);
+              return;
+            }
+
+            if (!gettingLatest) {
+              var links = parseLinks(msg.headers.link);
+              if (links.next) {
+                urls.push(links.next.url);
+              }
+            }
+
+            audits.list = audits.list.concat(body.list);
+            Object.keys(body.related_objects).forEach(function(ro) {
+              audits.relatedObjects[ro.id] = body.related_objects[ro];
+            });
+
+            callback(null);
+          });
+        }, function(err) {
           if (err) {
-            Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
             callback(err);
             return;
           }
-          callback(null, body);
+
+          callback(null, audits);
         });
       }]
     }, function(err, results) {
       if (err) {
+              Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
         callback(err);
         return;
       }
 
+      Logger.info(INPUT_NAME, "Got events: " + results.getEvents.list.length);
+
       callback(null, results.getEvents);
     });
-  };
-
-  /**
-   * Helper function that returns a readable name for each actor type.
-   */
-  ScaleftInput.prototype.getActorType = function(actorType) {
-    switch (actorType.toUpperCase()) {
-      case 'T':
-        return 'team';
-      case 'U':
-        return 'user';
-      case 'I':
-        return 'instance';
-      case 'D':
-        return 'device';
-      case 'DT':
-        return 'device type';
-      default:
-        return actorType;
-    }
   };
 
   /**
@@ -156,7 +189,7 @@
     var ret = {
           id: ev.id,
           timestamp: ev.timestamp
-        }
+        },
         rObjs = {};
 
     Object.keys(ev.details).forEach(function(detail) {
@@ -184,7 +217,7 @@
   ScaleftInput.prototype.getCheckpointPath = function() {
     var shasum = crypto.createHash('sha1');
 
-    shasum.update(util.format('%s-%s', this.teamName, this.instanceAddr));
+    shasum.update(util.format('%s-%s-%d', this.teamName, this.instanceAddr, this.api_version));
 
     return path.join(this.checkPointDir, INPUT_NAME, shasum.digest('hex'));
   };
@@ -193,7 +226,7 @@
    * Saves the provided timestamp to the checkpoint file.
    */
   ScaleftInput.prototype.saveCheckpoint = function(timestamp) {
-    Logger.info(INPUT_NAME, "saving check point")
+    Logger.debug(INPUT_NAME, "saving check point")
     fs.writeFileSync(this.getCheckpointPath(), timestamp.toString());
   };
 
@@ -202,25 +235,23 @@
    * If the checkpoint file can't be read or is invalid, return false.
    */
   ScaleftInput.prototype.loadCheckpoint = function() {
-    var ts = null;
+    var offset = "";
     try {
-      var ts = new Date(fs.readFileSync(this.getCheckpointPath()));
+      offset = fs.readFileSync(this.getCheckpointPath());
     } catch (e) {
-      return false
+      return false;
     }
 
-    if (isNaN(ts.getTime())) {
-      return false
-    }
 
-    return ts;
+
+    return offset;
   };
 
   /**
    * Returns the scheme for the input's configuration.
    */
   exports.getScheme = function () {
-    var scheme = new Scheme("ScaleFT Audit Event Input")
+    var scheme = new Scheme("ScaleFT Audit Event Input");
 
     scheme.description = "A modular input that retrieves audit events from ScaleFT's API.";
     scheme.useExternalValidation = true;
@@ -336,7 +367,7 @@
 
     if (checkpoint) {
       Logger.info(INPUT_NAME, "Loaded checkpoint data: " + checkpoint);
-      sftInput.lastIndexTime = checkpoint;
+      sftInput.lastIndexOffset = checkpoint;
     }
 
     (function pollEvents() {
@@ -347,25 +378,17 @@
 
         emitToSplunk: ['getEvents', function (results, callback) {
           var evts = results.getEvents.list,
-              relatedObjects = results.getEvents.related_objects,
-              indexTime = null;
+              relatedObjects = results.getEvents.relatedObjects,
+              indexOffset = "";
 
           if (!evts) {
             callback();
             return;
           }
 
+          indexOffset = (evts[evts.length - 1] && evts[evts.length - 1].id) || "";
+
           evts.forEach(function (ev) {
-            var evDate = new Date(ev.timestamp);
-
-            if (!indexTime) {
-              indexTime = evDate;
-            }
-
-            if (evDate <= sftInput.lastIndexTime) {
-              return;
-            }
-
             var newEv = new Event({
               stanza: name,
               data: sftInput.formatEvent(ev, relatedObjects)
@@ -378,13 +401,17 @@
             }
           });
 
-          sftInput.lastIndexTime = indexTime;
-          sftInput.saveCheckpoint(sftInput.lastIndexTime);
+          if (indexOffset !== "") {
+            Logger.info(INPUT_NAME, "Saving checkpoint: " + indexOffset);
+            sftInput.lastIndexOffset = indexOffset;
+            sftInput.saveCheckpoint(sftInput.lastIndexOffset);
+          }
+
           callback();
         }]
       }, function (err) {
         if (err) {
-          Logger.error(INPUT_NAME, "Error while polling events. Sleeping for 1 minute.");
+          Logger.error(INPUT_NAME, "Error while polling events. Sleeping for 1 polling period.");
         }
         setTimeout(pollEvents, pollingInterval * 1000);
       });
