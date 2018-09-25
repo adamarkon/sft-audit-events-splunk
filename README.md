@@ -31,8 +31,14 @@ This modular input depends on a couple of npm modules:
   1. [request](https://www.npmjs.com/package/request) - [Apache 2.0](http://spdx.org/licenses/Apache-2.0)
   2. [async](https://www.npmjs.com/package/async) - [MIT](http://spdx.org/licenses/MIT)
   3. [splunk-sdk](https://www.npmjs.com/package/splunk-sdk) - [Apache 2.0](http://spdx.org/licenses/Apache-2.0)
+  4. [parse-link-header](https://github.com/thlorenz/parse-link-header) - [MIT](http://spdx.org/licenses/MIT)
 
 # Whats New
+
+### 2.0.0
+ - Use new audits API for more efficient audits retrieval
+ - Retrive all audits since the last retrieved audit and now, instead of
+   just 100 at a time.
 
 ### 1.0.5
  - Fix bug that caused the most recent audit event to be duplicated in splunk
