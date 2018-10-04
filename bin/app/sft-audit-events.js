@@ -155,7 +155,7 @@
 
             audits.list = audits.list.concat(body.list);
             Object.keys(body.related_objects).forEach(function(ro) {
-              audits.relatedObjects[ro.id] = body.related_objects[ro];
+              audits.relatedObjects[ro] = body.related_objects[ro];
             });
 
             callback(null);
