@@ -301,7 +301,7 @@
       new Argument({
         name: "checkpoint_dir",
         dataType: Argument.dataTypeString,
-        description: "The path to a directory to hold modular input state. Typically $SPLUNK_DB/modinputs/",
+        description: "The path to a directory to hold modular input state. This should be persistent storage that Splunk can read and write from.",
         requiredOnCreate: true,
         requiredOnEdit: true
       })
@@ -379,7 +379,7 @@
         emitToSplunk: ['getEvents', function (results, callback) {
           var evts = results.getEvents.list,
               relatedObjects = results.getEvents.relatedObjects,
-              indexOffset = "";
+              indexOffset;
 
           if (!evts) {
             callback();
