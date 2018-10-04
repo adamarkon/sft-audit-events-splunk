@@ -37,7 +37,7 @@ This modular input depends on a couple of npm modules:
 
 ### 2.0.0
  - Use new audits API for more efficient audits retrieval
- - Retrive all audits since the last retrieved audit and now, instead of
+ - Retrieve all audits since the last retrieved audit and now, instead of
    just 100 at a time.
 
 ### 1.0.5

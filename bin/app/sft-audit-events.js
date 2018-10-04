@@ -171,7 +171,7 @@
       }]
     }, function(err, results) {
       if (err) {
-              Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
+        Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
         callback(err);
         return;
       }
