@@ -35,6 +35,9 @@ This modular input depends on a couple of npm modules:
 
 # Whats New
 
+### 2.0.1
+ - Include missing parse-link-header dependency
+
 ### 2.0.0
  - Use new audits API for more efficient audits retrieval
  - Retrieve all audits since the last retrieved audit and now, instead of
