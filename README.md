@@ -23,7 +23,7 @@ This modular input uses and requires NodeJS versions 4.0.0 or greater. Please vi
     * `polling_interval`: How often events should be imported in seconds. Defaults to 60 seconds.
     * `client_key`: The key id for your API key.
     * `client_secret`: The secret key for your API key.
-    * `checkpoint_dir`: The directory to store any checkpoint data for the app. This can be anything, but `$SPLUNK_DB/modinputs/` will let splunk manage the data.
+    * `checkpoint_dir`: The directory to store any checkpoint data for the app. This should be a path on persistent storage that Splunk can read and write from.
 8. Enjoy!
 
 ### Dependencies
@@ -31,8 +31,14 @@ This modular input depends on a couple of npm modules:
   1. [request](https://www.npmjs.com/package/request) - [Apache 2.0](http://spdx.org/licenses/Apache-2.0)
   2. [async](https://www.npmjs.com/package/async) - [MIT](http://spdx.org/licenses/MIT)
   3. [splunk-sdk](https://www.npmjs.com/package/splunk-sdk) - [Apache 2.0](http://spdx.org/licenses/Apache-2.0)
+  4. [parse-link-header](https://github.com/thlorenz/parse-link-header) - [MIT](http://spdx.org/licenses/MIT)
 
 # Whats New
+
+### 2.0.0
+ - Use new audits API for more efficient audits retrieval
+ - Retrieve all audits since the last retrieved audit and now, instead of
+   just 100 at a time.
 
 ### 1.0.5
  - Fix bug that caused the most recent audit event to be duplicated in splunk
