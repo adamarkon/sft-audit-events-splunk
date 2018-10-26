@@ -26,13 +26,12 @@
    *  * Validation
    *  * State management
    */
-  var ScaleftInput = function(teamName, instanceAddress, clientKey, clientSecret, checkpointDir) {
+  var ScaleftInput = function(teamName, instanceAddress, clientKey, clientSecret) {
     this.token = "";
     this.tokenExpiration = 0;
     this.teamName = teamName;
     this.clientKey = clientKey;
     this.clientSecret = clientSecret;
-    this.checkPointDir = checkpointDir;
     this.lastIndexOffset = "";
     this.api_version = 2;
 
@@ -219,14 +218,14 @@
 
     shasum.update(util.format('%s-%s-%d', this.teamName, this.instanceAddr, this.api_version));
 
-    return path.join(this.checkPointDir, INPUT_NAME, shasum.digest('hex'));
+    return path.join(process.env["SPLUNK_DB"], "modinputs", INPUT_NAME, shasum.digest('hex'));
   };
 
   /**
    * Saves the provided timestamp to the checkpoint file.
    */
   ScaleftInput.prototype.saveCheckpoint = function(timestamp) {
-    Logger.debug(INPUT_NAME, "saving check point")
+    Logger.debug(INPUT_NAME, "saving check point");
     fs.writeFileSync(this.getCheckpointPath(), timestamp.toString());
   };
 
@@ -236,13 +235,12 @@
    */
   ScaleftInput.prototype.loadCheckpoint = function() {
     var offset = "";
+
     try {
       offset = fs.readFileSync(this.getCheckpointPath());
     } catch (e) {
       return false;
     }
-
-
 
     return offset;
   };
@@ -297,14 +295,6 @@
         requiredOnCreate: true,
         requiredOnEdit: true
       }),
-
-      new Argument({
-        name: "checkpoint_dir",
-        dataType: Argument.dataTypeString,
-        description: "The path to a directory to hold modular input state. This should be persistent storage that Splunk can read and write from.",
-        requiredOnCreate: true,
-        requiredOnEdit: true
-      })
     ];
 
     return scheme;
@@ -359,8 +349,7 @@
           singleInput.team_name,
           singleInput.instance_address,
           singleInput.client_key,
-          singleInput.client_secret,
-          singleInput.checkpoint_dir
+          singleInput.client_secret
         );
 
     var checkpoint = sftInput.loadCheckpoint();

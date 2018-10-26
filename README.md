@@ -23,7 +23,6 @@ This modular input uses and requires NodeJS versions 4.0.0 or greater. Please vi
     * `polling_interval`: How often events should be imported in seconds. Defaults to 60 seconds.
     * `client_key`: The key id for your API key.
     * `client_secret`: The secret key for your API key.
-    * `checkpoint_dir`: The directory to store any checkpoint data for the app. This should be a path on persistent storage that Splunk can read and write from.
 8. Enjoy!
 
 ### Dependencies
@@ -34,6 +33,18 @@ This modular input depends on a couple of npm modules:
   4. [parse-link-header](https://github.com/thlorenz/parse-link-header) - [MIT](http://spdx.org/licenses/MIT)
 
 # Whats New
+
+### 3.0.0
+ - Removes the checkpoint directory configuration option. Checkpoint data is now stored at
+   `$SPLUNK_DB/modinputs/sft-audit-events`. This matches what the option defaulted to previously.
+   
+   If you previously defined a checkpoint directory other than `$SPLUNK_DB/modinputs`, you'll need
+   to follow these steps in order to migrate your metadata before upgrading:
+   
+   1. Disable the ScaleFT modular input
+   2. Copy the contents of `$previous_checkpoint_dir/sft-audit-events` to `$SPLUNK_DB/modinputs/sft-audit-events`
+   3. Upgrade the ScaleFT modular input
+   4. Ensure the ScaleFT modular input is enabled
 
 ### 2.0.1
  - Include missing parse-link-header dependency

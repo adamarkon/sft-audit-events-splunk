@@ -6,4 +6,3 @@ instance_address = <value>
 polling_interval = <value>
 client_key = <value>
 client_secret = <value>
-checkpoint_dir = <value>
