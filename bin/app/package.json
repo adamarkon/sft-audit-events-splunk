@@ -10,9 +10,9 @@
   "author": "Justin Gallardo <justin.gallardo@scaleft.com>",
   "license": "Apache-2.0",
   "dependencies": {
-    "async": "^2.0.0-rc.5",
+    "async": "^2.6.1",
     "parse-link-header": "^1.0.1",
-    "request": "^2.72.0",
-    "splunk-sdk": "^1.8.1"
+    "request": "^2.88.0",
+    "splunk-sdk": "^1.8.4"
   }
 }
