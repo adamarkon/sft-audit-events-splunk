@@ -53,7 +53,7 @@
       return;
     }
 
-    Logger.debug(INPUT_NAME, "Token is expired. Refreshing.");
+    Logger.info(INPUT_NAME, "Token is expired. Refreshing.");
 
     request({
       uri: this.getRequestUri('/service_token'),
@@ -99,7 +99,7 @@
             initialRequest = true,
             gettingLatest = false;
 
-        Logger.debug(INPUT_NAME, "Last offset: '" + self.lastIndexOffset + "'");
+        Logger.info(INPUT_NAME, "Last offset: '" + self.lastIndexOffset + "'");
 
         if (self.lastIndexOffset !== "") {
           qs.offset = self.lastIndexOffset;
@@ -122,7 +122,7 @@
         }, function(callback) {
           var current = urls.shift();
 
-          Logger.debug(INPUT_NAME, "Grabbing audits page with: " + current);
+          Logger.info(INPUT_NAME, "Grabbing audits page with: " + current);
 
           var urlOpts = {
             uri: current,
@@ -147,7 +147,7 @@
 
             if (!gettingLatest) {
               var links = parseLinks(msg.headers.link);
-              if (links.next) {
+              if (links && links.next && links.next.url) {
                 urls.push(links.next.url);
               }
             }
@@ -225,7 +225,7 @@
    * Saves the provided timestamp to the checkpoint file.
    */
   ScaleftInput.prototype.saveCheckpoint = function(timestamp) {
-    Logger.debug(INPUT_NAME, "saving check point");
+    Logger.info(INPUT_NAME, "saving check point");
     fs.writeFileSync(this.getCheckpointPath(), timestamp.toString());
   };
 

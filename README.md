@@ -34,7 +34,10 @@ This modular input depends on a couple of npm modules:
 
 # Whats New
 
-### 3.0.0
+### 3.0.2
+ - Fixes bug in audit pagination.
+
+### 3.0.1
  - Removes the checkpoint directory configuration option. Checkpoint data is now stored at
    `$SPLUNK_DB/modinputs/sft-audit-events`. This matches what the option defaulted to previously.
    
