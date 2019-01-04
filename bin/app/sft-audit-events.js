@@ -70,6 +70,15 @@
         return;
       }
 
+      if (msg.statusCode !== 200) {
+        Logger.error(INPUT_NAME, 'Unexpected status code: ' + msg.statusCode);
+        if (body) {
+          Logger.error(INPUT_NAME, "Error response: " + JSON.stringify(body))
+        }
+        callback(new Error("unexpected status code"));
+        return;
+      }
+
       self.token = body.bearer_token;
       self.tokenExpiration = Date.now() + 60 * 60 * 1000; // The token expires in 1 hour.
       callback();
@@ -142,6 +151,15 @@
             if (err) {
               Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
               callback(err);
+              return;
+            }
+
+            if (msg.statusCode !== 200) {
+              Logger.error(INPUT_NAME, 'Unexpected status code: ' + msg.statusCode);
+              if (body) {
+                Logger.error(INPUT_NAME, "Error response: " + JSON.stringify(body))
+              }
+              callback(new Error("unexpected status code"));
               return;
             }
 
