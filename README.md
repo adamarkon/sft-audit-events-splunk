@@ -34,6 +34,9 @@ This modular input depends on a couple of npm modules:
 
 # Whats New
 
+### 3.0.3
+ - Fixes issue where unexpected status codes weren't properly handled.
+
 ### 3.0.2
  - Fixes bug in audit pagination.
 
