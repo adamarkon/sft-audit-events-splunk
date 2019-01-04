@@ -152,10 +152,17 @@
               }
             }
 
-            audits.list = audits.list.concat(body.list);
-            Object.keys(body.related_objects).forEach(function(ro) {
-              audits.relatedObjects[ro] = body.related_objects[ro];
-            });
+            if (body) {
+              if (body.list && body.list.length > 0) {
+                audits.list = audits.list.concat(body.list);
+              }
+
+              if (body.related_objects) {
+                Object.keys(body.related_objects).forEach(function (ro) {
+                  audits.relatedObjects[ro] = body.related_objects[ro];
+                });
+              }
+            }
 
             callback(null);
           });
