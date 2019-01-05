@@ -98,7 +98,7 @@
    *  * Make sure we have a valid auth token from the ScaleFT API.
    *  * Makes a request to the ScaleFT API for the last 100 audit events.
    */
-  ScaleftInput.prototype.getEvents = function(callback) {
+  ScaleftInput.prototype.getAndEmitEvents = function(eventWriter, callback) {
     var self = this;
 
     async.auto({
@@ -120,11 +120,6 @@
 
         var uri = self.getRequestUri('/auditsV2');
         var urls = [uri];
-        var audits = {
-          list: [],
-          relatedObjects: {}
-        };
-
 
         async.until(function done() {
           return urls.length === 0;
@@ -171,15 +166,32 @@
             }
 
             if (body) {
-              if (body.list && body.list.length > 0) {
-                audits.list = audits.list.concat(body.list);
+              if (!body.list || !body.related_objects) {
+                callback(new Error("malformed response, dying."));
+                return
               }
 
-              if (body.related_objects) {
-                Object.keys(body.related_objects).forEach(function (ro) {
-                  audits.relatedObjects[ro] = body.related_objects[ro];
+              var indexOffset = (body.list[body.list.length - 1] && body.list[body.list.length - 1].id) || "";
+
+              body.list.forEach(function(ev) {
+                var newEv = new Event({
+                  stanza: INPUT_NAME,
+                  data: self.formatEvent(ev, body.related_objects)
                 });
+
+                try {
+                  eventWriter.writeEvent(newEv);
+                } catch (e) {
+                  Logger.error(INPUT_NAME, e.message);
+                }
+              });
+
+              if (indexOffset !== "") {
+                Logger.info(INPUT_NAME, "Saving checkpoint: " + indexOffset);
+                self.lastIndexOffset = indexOffset;
+                self.saveCheckpoint(self.lastIndexOffset);
               }
+
             }
 
             callback(null);
@@ -190,7 +202,7 @@
             return;
           }
 
-          callback(null, audits);
+          callback();
         });
       }]
     }, function(err, results) {
@@ -200,9 +212,9 @@
         return;
       }
 
-      Logger.info(INPUT_NAME, "Got events: " + results.getEvents.list.length);
+      Logger.info(INPUT_NAME, "Got events: " + results.getAndEmitEvents.list.length);
 
-      callback(null, results.getEvents);
+      callback(null, results.getAndEmitEvents);
     });
   };
 
@@ -388,41 +400,7 @@
       Logger.info(INPUT_NAME, "Polling for new sft audit events.");
 
       async.auto({
-        getEvents: sftInput.getEvents.bind(sftInput),
-
-        emitToSplunk: ['getEvents', function (results, callback) {
-          var evts = results.getEvents.list,
-              relatedObjects = results.getEvents.relatedObjects,
-              indexOffset;
-
-          if (!evts) {
-            callback();
-            return;
-          }
-
-          indexOffset = (evts[evts.length - 1] && evts[evts.length - 1].id) || "";
-
-          evts.forEach(function (ev) {
-            var newEv = new Event({
-              stanza: name,
-              data: sftInput.formatEvent(ev, relatedObjects)
-            });
-
-            try {
-              eventWriter.writeEvent(newEv);
-            } catch (e) {
-              Logger.error(name, e.message);
-            }
-          });
-
-          if (indexOffset !== "") {
-            Logger.info(INPUT_NAME, "Saving checkpoint: " + indexOffset);
-            sftInput.lastIndexOffset = indexOffset;
-            sftInput.saveCheckpoint(sftInput.lastIndexOffset);
-          }
-
-          callback();
-        }]
+        getAndEmitEvents: sftInput.getAndEmitEvents.bind(sftInput, eventWriter),
       }, function (err) {
         if (err) {
           Logger.error(INPUT_NAME, "Error while polling events. Sleeping for 1 polling period.");
