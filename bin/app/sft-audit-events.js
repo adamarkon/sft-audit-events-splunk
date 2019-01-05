@@ -98,7 +98,7 @@
    *  * Make sure we have a valid auth token from the ScaleFT API.
    *  * Makes a request to the ScaleFT API for the last 100 audit events.
    */
-  ScaleftInput.prototype.getEvents = function(eventWriter, callback) {
+  ScaleftInput.prototype.getAndEmitEvents = function(eventWriter, callback) {
     var self = this;
 
     async.auto({
@@ -212,9 +212,9 @@
         return;
       }
 
-      Logger.info(INPUT_NAME, "Got events: " + results.getEvents.list.length);
+      Logger.info(INPUT_NAME, "Got events: " + results.getAndEmitEvents.list.length);
 
-      callback(null, results.getEvents);
+      callback(null, results.getAndEmitEvents);
     });
   };
 
@@ -400,7 +400,7 @@
       Logger.info(INPUT_NAME, "Polling for new sft audit events.");
 
       async.auto({
-        getEvents: sftInput.getEvents.bind(sftInput, eventWriter),
+        getAndEmitEvents: sftInput.getAndEmitEvents.bind(sftInput, eventWriter),
       }, function (err) {
         if (err) {
           Logger.error(INPUT_NAME, "Error while polling events. Sleeping for 1 polling period.");
