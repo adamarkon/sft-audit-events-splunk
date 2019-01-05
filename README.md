@@ -34,6 +34,10 @@ This modular input depends on a couple of npm modules:
 
 # Whats New
 
+### 3.1.0
+ - Improves log ingestion method. Now as audits are retrieved from the ScaleFT API, they will be sent to Splunk as soon
+   as possible.
+
 ### 3.0.3
  - Fixes issue where unexpected status codes weren't properly handled.
 
