@@ -108,8 +108,8 @@
       refreshToken: this.refreshToken.bind(this),
       getEvents: ['refreshToken', function(results, callback) {
         var qs = {},
-            initialRequest = true,
-            gettingLatest = false;
+          initialRequest = true,
+          gettingLatest = false;
 
         Logger.info(INPUT_KIND, "Last offset: '" + self.lastIndexOffset + "'");
 
@@ -225,15 +225,15 @@
    */
   ScaleftInput.prototype.formatEvent = function(ev, relatedObjects) {
     var ret = {
-          id: ev.id,
-          timestamp: ev.timestamp
-        },
-        rObjs = {};
+        id: ev.id,
+        timestamp: ev.timestamp
+      },
+      rObjs = {};
 
     Object.keys(ev.details).forEach(function(detail) {
       if (relatedObjects.hasOwnProperty(ev.details[detail])) {
         var rObj = relatedObjects[ev.details[detail]],
-            objList = rObjs[rObj.type] || [];
+          objList = rObjs[rObj.type] || [];
         objList.push(rObj.object);
         rObjs[rObj.type] = objList;
       } else if (ev.details[detail] !== '') {
@@ -344,10 +344,10 @@
    */
   exports.validateInput = function(definition, done) {
     var teamName = definition.parameters.team_name.toString().toLowerCase(),
-        instanceAddr = definition.parameters.instance_address.toString(),
-        client_key = definition.parameters.client_key.toString(),
-        interval = parseInt(definition.parameters.polling_interval, 10),
-        teamNameRegex = /^[\w\-_.]+$/;
+      instanceAddr = definition.parameters.instance_address.toString(),
+      client_key = definition.parameters.client_key.toString(),
+      interval = parseInt(definition.parameters.polling_interval, 10),
+      teamNameRegex = /^[\w\-_.]+$/;
 
     if (!teamName.match(teamNameRegex)) {
       done(new Error("Team names must match regular expression ^[\w\-_.]+$"));
@@ -380,35 +380,35 @@
   };
 
   exports.service = function() {
-	  if (this._service) {
-		  return this._service;
-	  }
+    if (this._service) {
+      return this._service;
+    }
 
-		if (!this._inputDefinition) {
-		  return null;
-		}
+    if (!this._inputDefinition) {
+      return null;
+    }
 
-		var splunkdURI = this._inputDefinition.metadata["server_uri"];
-		var sessionKey = this._inputDefinition.metadata["session_key"];
+    var splunkdURI = this._inputDefinition.metadata["server_uri"];
+    var sessionKey = this._inputDefinition.metadata["session_key"];
 
-		var urlParts = url.parse(splunkdURI);
+    var urlParts = url.parse(splunkdURI);
 
-		// urlParts.protocol will have a trailing colon; remove it.
-		var scheme = urlParts.protocol.replace(":", "");
-		var splunkdHost = urlParts.hostname;
-		var splunkdPort = urlParts.port;
+    // urlParts.protocol will have a trailing colon; remove it.
+    var scheme = urlParts.protocol.replace(":", "");
+    var splunkdHost = urlParts.hostname;
+    var splunkdPort = urlParts.port;
 
-		this._service = new splunkjs.Service({
-				scheme: scheme,
-				host: splunkdHost,
-				port: splunkdPort,
-				token: sessionKey
-		});
+    this._service = new splunkjs.Service({
+      scheme: scheme,
+      host: splunkdHost,
+      port: splunkdPort,
+      token: sessionKey
+    });
 
-		return this._service;
+    return this._service;
   };
 
-	exports.encrypt = function(key, val, callback) {
+  exports.encrypt = function(key, val, callback) {
     var s = this.service();
     var storagePasswords = s.storagePasswords();
 
@@ -449,7 +449,7 @@
       }
       callback(null, true);
     });
-	};
+  };
 
   exports.getPassword = function(key, callback) {
     var s = this.service();
@@ -533,11 +533,11 @@
 
       run: ['getPassword', function(results, callback) {
         var sftInput = new ScaleftInput(
-              singleInput.team_name,
-              singleInput.instance_address,
-              singleInput.client_key,
-              results.getPassword
-            );
+          singleInput.team_name,
+          singleInput.instance_address,
+          singleInput.client_key,
+          results.getPassword
+        );
 
         var checkpoint = sftInput.loadCheckpoint();
 
