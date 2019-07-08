@@ -4,6 +4,7 @@
   var crypto = require('crypto');
   var path = require('path');
   var fs = require('fs');
+  var readline = require('readline');
 
   var request = require('request');
   var async = require('async');
@@ -16,7 +17,9 @@
   var Scheme = ModularInputs.Scheme;
   var Argument = ModularInputs.Argument;
 
-  var INPUT_NAME = 'sft-audit-events';
+  var INPUT_NAME = 'sft-audits';
+  var INPUT_KIND = 'sft-audit-events';
+  var SECRET_MASK = '******';
 
   /**
    * The ScaleftInput object does most of the work for us.
@@ -53,7 +56,7 @@
       return;
     }
 
-    Logger.info(INPUT_NAME, "Token is expired. Refreshing.");
+    Logger.info(INPUT_KIND, "Token is expired. Refreshing.");
 
     request({
       uri: this.getRequestUri('/service_token'),
@@ -65,15 +68,15 @@
       }
     }, function(err, msg, body) {
       if (err) {
-        Logger.error(INPUT_NAME, 'Error getting token: ' + err.msg);
+        Logger.error(INPUT_KIND, 'Error getting token: ' + err.msg);
         callback(err);
         return;
       }
 
       if (msg.statusCode !== 200) {
-        Logger.error(INPUT_NAME, 'Unexpected status code: ' + msg.statusCode);
+        Logger.error(INPUT_KIND, 'Unexpected status code: ' + msg.statusCode);
         if (body) {
-          Logger.error(INPUT_NAME, "Error response: " + JSON.stringify(body))
+          Logger.error(INPUT_KIND, "Error response: " + JSON.stringify(body))
         }
         callback(new Error("unexpected status code"));
         return;
@@ -98,17 +101,17 @@
    *  * Make sure we have a valid auth token from the ScaleFT API.
    *  * Makes a request to the ScaleFT API for the last 100 audit events.
    */
-  ScaleftInput.prototype.getAndEmitEvents = function(eventWriter, callback) {
+  ScaleftInput.prototype.getEvents = function(eventWriter, callback) {
     var self = this;
 
     async.auto({
       refreshToken: this.refreshToken.bind(this),
       getEvents: ['refreshToken', function(results, callback) {
         var qs = {},
-            initialRequest = true,
-            gettingLatest = false;
+          initialRequest = true,
+          gettingLatest = false;
 
-        Logger.info(INPUT_NAME, "Last offset: '" + self.lastIndexOffset + "'");
+        Logger.info(INPUT_KIND, "Last offset: '" + self.lastIndexOffset + "'");
 
         if (self.lastIndexOffset !== "") {
           qs.offset = self.lastIndexOffset;
@@ -126,7 +129,7 @@
         }, function(callback) {
           var current = urls.shift();
 
-          Logger.info(INPUT_NAME, "Grabbing audits page with: " + current);
+          Logger.info(INPUT_KIND, "Grabbing audits page with: " + current);
 
           var urlOpts = {
             uri: current,
@@ -144,15 +147,15 @@
 
           request(urlOpts, function (err, msg, body) {
             if (err) {
-              Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
+              Logger.error(INPUT_KIND, 'Error retrieving audit events: ' + err);
               callback(err);
               return;
             }
 
             if (msg.statusCode !== 200) {
-              Logger.error(INPUT_NAME, 'Unexpected status code: ' + msg.statusCode);
+              Logger.error(INPUT_KIND, 'Unexpected status code: ' + msg.statusCode);
               if (body) {
-                Logger.error(INPUT_NAME, "Error response: " + JSON.stringify(body))
+                Logger.error(INPUT_KIND, "Error response: " + JSON.stringify(body))
               }
               callback(new Error("unexpected status code"));
               return;
@@ -175,23 +178,24 @@
 
               body.list.forEach(function(ev) {
                 var newEv = new Event({
-                  stanza: INPUT_NAME,
+                  stanza: INPUT_KIND,
                   data: self.formatEvent(ev, body.related_objects)
                 });
 
                 try {
                   eventWriter.writeEvent(newEv);
                 } catch (e) {
-                  Logger.error(INPUT_NAME, e.message);
+                  Logger.error(INPUT_KIND, e.message);
                 }
               });
 
               if (indexOffset !== "") {
-                Logger.info(INPUT_NAME, "Saving checkpoint: " + indexOffset);
+                Logger.info(INPUT_KIND, "Saving checkpoint: " + indexOffset);
                 self.lastIndexOffset = indexOffset;
                 self.saveCheckpoint(self.lastIndexOffset);
               }
 
+              Logger.info(INPUT_KIND, "Got events: " + body.list.length);
             }
 
             callback(null);
@@ -207,14 +211,12 @@
       }]
     }, function(err, results) {
       if (err) {
-        Logger.error(INPUT_NAME, 'Error retrieving audit events: ' + err);
+        Logger.error(INPUT_KIND, 'Error retrieving audit events: ' + err);
         callback(err);
         return;
       }
 
-      Logger.info(INPUT_NAME, "Got events: " + results.getAndEmitEvents.list.length);
-
-      callback(null, results.getAndEmitEvents);
+      callback();
     });
   };
 
@@ -223,15 +225,15 @@
    */
   ScaleftInput.prototype.formatEvent = function(ev, relatedObjects) {
     var ret = {
-          id: ev.id,
-          timestamp: ev.timestamp
-        },
-        rObjs = {};
+        id: ev.id,
+        timestamp: ev.timestamp
+      },
+      rObjs = {};
 
     Object.keys(ev.details).forEach(function(detail) {
       if (relatedObjects.hasOwnProperty(ev.details[detail])) {
         var rObj = relatedObjects[ev.details[detail]],
-            objList = rObjs[rObj.type] || [];
+          objList = rObjs[rObj.type] || [];
         objList.push(rObj.object);
         rObjs[rObj.type] = objList;
       } else if (ev.details[detail] !== '') {
@@ -255,14 +257,14 @@
 
     shasum.update(util.format('%s-%s-%d', this.teamName, this.instanceAddr, this.api_version));
 
-    return path.join(process.env["SPLUNK_DB"], "modinputs", INPUT_NAME, shasum.digest('hex'));
+    return path.join(process.env["SPLUNK_DB"], "modinputs", INPUT_KIND, shasum.digest('hex'));
   };
 
   /**
    * Saves the provided timestamp to the checkpoint file.
    */
   ScaleftInput.prototype.saveCheckpoint = function(timestamp) {
-    Logger.info(INPUT_NAME, "saving check point");
+    Logger.info(INPUT_KIND, "saving check point");
     fs.writeFileSync(this.getCheckpointPath(), timestamp.toString());
   };
 
@@ -342,10 +344,10 @@
    */
   exports.validateInput = function(definition, done) {
     var teamName = definition.parameters.team_name.toString().toLowerCase(),
-        instanceAddr = definition.parameters.instance_address.toString(),
-        client_key = definition.parameters.client_key.toString(),
-        interval = parseInt(definition.parameters.polling_interval, 10),
-        teamNameRegex = /^[\w\-_.]+$/;
+      instanceAddr = definition.parameters.instance_address.toString(),
+      client_key = definition.parameters.client_key.toString(),
+      interval = parseInt(definition.parameters.polling_interval, 10),
+      teamNameRegex = /^[\w\-_.]+$/;
 
     if (!teamName.match(teamNameRegex)) {
       done(new Error("Team names must match regular expression ^[\w\-_.]+$"));
@@ -377,37 +379,193 @@
     done();
   };
 
+  exports.service = function() {
+    if (this._service) {
+      return this._service;
+    }
+
+    if (!this._inputDefinition) {
+      return null;
+    }
+
+    var splunkdURI = this._inputDefinition.metadata["server_uri"];
+    var sessionKey = this._inputDefinition.metadata["session_key"];
+
+    var urlParts = url.parse(splunkdURI);
+
+    // urlParts.protocol will have a trailing colon; remove it.
+    var scheme = urlParts.protocol.replace(":", "");
+    var splunkdHost = urlParts.hostname;
+    var splunkdPort = urlParts.port;
+
+    this._service = new splunkjs.Service({
+      scheme: scheme,
+      host: splunkdHost,
+      port: splunkdPort,
+      token: sessionKey
+    });
+
+    return this._service;
+  };
+
+  exports.encrypt = function(key, val, callback) {
+    var s = this.service();
+    var storagePasswords = s.storagePasswords();
+
+    async.auto({
+      fetch: function(callback) {
+        storagePasswords.fetch(callback);
+      },
+      rm: ['fetch', function(results, callback) {
+        var matchingPass;
+
+        results.fetch.list().forEach(function(pass) {
+          if (matchingPass) {
+            return;
+          }
+          if (pass._properties.username === key) {
+            matchingPass = pass;
+          }
+        });
+
+        if (matchingPass) {
+          matchingPass.remove(callback);
+          return;
+        }
+
+        callback();
+      }],
+      create: ['rm', function(results, callback) {
+        storagePasswords.create({
+          name: key,
+          password: val
+        }, callback);
+      }],
+    }, function(err, results) {
+      if (err) {
+        Logger.error(INPUT_KIND, "error encrypting: " + JSON.stringify(err));
+        callback(err);
+        return;
+      }
+      callback(null, true);
+    });
+  };
+
+  exports.getPassword = function(key, callback) {
+    var s = this.service();
+    var storagePasswords = s.storagePasswords();
+
+    storagePasswords.fetch(function(err, passwords) {
+      if (err) {
+        callback(err);
+        return;
+      }
+
+      var outpass = "";
+
+      passwords.list().forEach(function(pass) {
+        if (pass._properties.username !== key) {
+          return
+        }
+
+        outpass = pass._properties.clear_password;
+      });
+
+      callback(null, outpass);
+    });
+  };
+
   /**
    * This method actually retrieves audit events and inputs them into splunk.
    */
   exports.streamEvents = function(name, singleInput, eventWriter, done) {
-    var pollingInterval = parseInt(singleInput.polling_interval, 10),
-        sftInput = new ScaleftInput(
+    var pollingInterval = parseInt(singleInput.polling_interval, 10);
+    var s = this.service();
+    var self = this;
+
+    async.auto({
+      checkEncryption: function(callback) {
+        if (singleInput.client_secret !== SECRET_MASK) {
+          self.encrypt(singleInput.client_key, singleInput.client_secret, callback);
+          return;
+        }
+        callback();
+      },
+
+      mask: ['checkEncryption', function(results, callback) {
+        // No need to mask if we didn't encrypt
+        if (!results.checkEncryption) {
+          callback();
+          return;
+        }
+
+        var endpoint = new splunkjs.Service.Endpoint(s, "data/inputs/"+INPUT_KIND+"/"+INPUT_NAME);
+
+        endpoint.post("", {
+          client_key: singleInput.client_key,
+          client_secret: SECRET_MASK,
+          team_name: singleInput.team_name,
+          instance_address: singleInput.instance_address,
+          polling_interval: singleInput.polling_interval
+        }, function(err, val) {
+          if (err) {
+            Logger.info(INPUT_KIND, "input update error" + JSON.stringify(err));
+            callback(err);
+            return;
+          }
+          Logger.info(INPUT_KIND, "input update " + JSON.stringify(val));
+          callback();
+          return;
+        });
+      }],
+
+      getPassword: ['mask', function(results, callback) {
+        self.getPassword(singleInput.client_key, function(err, clearPass) {
+          if (err) {
+            Logger.info(INPUT_KIND, "error getting pass " + JSON.stringify(s));
+            callback(err);
+            return;
+          }
+
+          callback(null, clearPass);
+        })
+      }],
+
+      run: ['getPassword', function(results, callback) {
+        var sftInput = new ScaleftInput(
           singleInput.team_name,
           singleInput.instance_address,
           singleInput.client_key,
-          singleInput.client_secret
+          results.getPassword
         );
 
-    var checkpoint = sftInput.loadCheckpoint();
+        var checkpoint = sftInput.loadCheckpoint();
 
-    if (checkpoint) {
-      Logger.info(INPUT_NAME, "Loaded checkpoint data: " + checkpoint);
-      sftInput.lastIndexOffset = checkpoint;
-    }
-
-    (function pollEvents() {
-      Logger.info(INPUT_NAME, "Polling for new sft audit events.");
-
-      async.auto({
-        getAndEmitEvents: sftInput.getAndEmitEvents.bind(sftInput, eventWriter),
-      }, function (err) {
-        if (err) {
-          Logger.error(INPUT_NAME, "Error while polling events. Sleeping for 1 polling period.");
+        if (checkpoint) {
+          Logger.info(INPUT_KIND, "Loaded checkpoint data: " + checkpoint);
+          sftInput.lastIndexOffset = checkpoint;
         }
-        setTimeout(pollEvents, pollingInterval * 1000);
-      });
-    })();
+
+        (function pollEvents() {
+          Logger.info(INPUT_KIND, "Polling for new sft audit events.");
+
+          async.auto({
+            getEvents: sftInput.getEvents.bind(sftInput, eventWriter),
+          }, function (err) {
+            if (err) {
+              Logger.error(INPUT_KIND, "Error while polling events. Sleeping for 1 polling period.");
+            }
+            setTimeout(pollEvents, pollingInterval * 1000);
+          });
+        })();
+      }]
+
+    }, function(err, results) {
+      if (err) {
+        Logger.error(INPUT_KIND, "Error while processing. " + err);
+        return;
+      }
+    });
   };
 
   ModularInputs.execute(exports, module);
