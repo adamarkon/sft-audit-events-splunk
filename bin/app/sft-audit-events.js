@@ -212,9 +212,7 @@
         return;
       }
 
-      Logger.info(INPUT_NAME, "Got events: " + results.getAndEmitEvents.list.length);
-
-      callback(null, results.getAndEmitEvents);
+      callback();
     });
   };
 
